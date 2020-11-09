@@ -1,0 +1,97 @@
+import pandas as pd
+from math import sqrt
+import numpy as np
+import matplotlib.pyplot as plt
+%matplotlib inline
+
+!wget -O moviedataset.zip https://s3-api.us-geo.objectstorage.softlayer.net/cf-courses-data/CognitiveClass/ML0101ENv3/labs/moviedataset.zip
+print('unziping ...')
+!unzip -o -j moviedataset.zip 
+
+movies = pd.read_csv(movies.csv)
+ratings = pd.read_csv(ratings.csv)
+
+#Using regular expressions to find a year stored between parentheses
+#We specify the parantheses so we don't conflict with movies that have years in their titles
+movies['year'] = movies.title.str.extract('(\(\d\d\d\d\))',expand=False)
+#Removing the parentheses
+movies['year'] = movies.year.str.extract('(\d\d\d\d)',expand=False)
+#Removing the years from the 'title' column
+movies['title'] = movies.title.str.replace('(\(\d\d\d\d\))', '')
+#Applying the strip function to get rid of any ending whitespace characters that may have appeared
+movies['title'] = movies['title'].apply(lambda x: x.strip())
+
+
+#Every genre is separated by a | so we simply have to call the split function on |
+movies['genres'] = movies.genres.str.split('|')
+
+moviesWithGenres = movies.copy()
+
+#For every row in the dataframe, iterate through the list of genres and place a 1 into the corresponding column
+for index, row in movies.iterrows():
+    for genre in row['genres']:
+        moviesWithGenres.at[index, genre] = 1
+#Filling in the NaN values with 0 to show that a movie doesn't have that column's genre
+moviesWithGenres = moviesWithGenres.fillna(0)
+
+#Drop removes a specified row or column from a dataframe
+ratings_df = ratings.drop('timestamp', 1)
+
+
+userInput = [
+            {'title':'Breakfast Club, The', 'rating':5},
+            {'title':'Toy Story', 'rating':3.5},
+            {'title':'Jumanji', 'rating':2},
+         ] 
+inputMovies = pd.DataFrame(userInput)
+
+
+#Filtering out the movies by title
+inputId = movies[movies['title'].isin(inputMovies['title'].tolist())]
+#Then merging it so we can get the movieId. It's implicitly merging it by title.
+inputMovies = pd.merge(inputId, inputMovies)
+#Dropping information we won't use from the input dataframe
+inputMovies = inputMovies.drop('genres', 1).drop('year', 1)
+#Final input dataframe
+#If a movie you added in above isn't here, then it might not be in the original 
+#dataframe or it might spelled differently, please check capitalisation.
+
+
+#We're going to start by learning the input's preferences, so let's get the subset of movies that the input 
+#has watched from the Dataframe containing genres defined with binary values.
+userMovies = moviesWithGenres[moviesWithGenres['movieId'].isin(inputMovies['movieId'].tolist())]
+
+
+#Resetting the index to avoid future issues
+userMovies = userMovies.reset_index(drop=True)
+#Dropping unnecessary issues due to save memory and to avoid issues
+userGenreTable = userMovies.drop('movieId', 1).drop('title', 1).drop('genres', 1).drop('year', 1)
+
+
+#Dot produt to get weights
+userProfile = userGenreTable.transpose().dot(inputMovies['rating'])
+#The user profile
+
+
+#Now let's get the genres of every movie in our original dataframe
+genreTable = moviesWithGenres.set_index(moviesWithGenres['movieId'])
+#And drop the unnecessary information
+genreTable = genreTable.drop('movieId', 1).drop('title', 1).drop('genres', 1).drop('year', 1)
+
+
+#Multiply the genres by the weights and then take the weighted average
+recommendationTable = ((genreTable*userProfile).sum(axis=1))/(userProfile.sum())
+
+
+#Sort our recommendations in descending order
+recommendationTable_df = recommendationTable_df.sort_values(ascending=False)
+#Just a peek at the values
+
+
+#The final recommendation table
+result = movies.loc[movies['movieId'].isin(recommendationTable_df.head(20).keys())]
+
+
+import pickle
+with open(r'RecSysModel.pkl','wb') as model_pkl:
+    pickle.dump(result, model_pkl, protocol=2)
